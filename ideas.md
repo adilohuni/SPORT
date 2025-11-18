@@ -1,0 +1,6 @@
+- Formatter, converts all " to ' unless they are \"
+  - Write Various version of the same prompt
+  - Navigation onto <area> .
+  - Semantic Colors and spaces on each type, 'need' 'should' etc.
+  - Node based tool
+  - Make the grammar issues more visible

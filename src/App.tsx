@@ -12,7 +12,11 @@ import { ExampleModal } from './components/ExampleModal';
 import { RestoreModal } from './components/RestoreModal';
 import { ImportTemplatesCollectionModal } from './components/ImportTemplatesCollectionModal';
 import { ExportTemplatesCollectionModal } from './components/ExportTemplatesCollectionModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { InputDialog } from './components/InputDialog';
 import { Toaster, toast } from 'sonner';
+import validateJsonFromText from './utils/jsonValidator';
+import BUILTIN_MAIN_FILE from './generated/builtinTemplates';
 
 export interface Cell {
   title: string;
@@ -36,7 +40,55 @@ export interface DeletedTemplate extends Template {
 }
 
 export default function App() {
-  const [mainFileName, setMainFileName] = useState('S.P.O.R.T.S.');
+  // Coerce any incoming template-like object to our `Template` shape and
+  // ensure `data` and `name` are primitive strings. Returns `null` for
+  // invalid entries.
+  const sanitizeTemplate = (t: any): Template | null => {
+    if (!t || typeof t !== 'object') return null;
+    const name = t.name != null ? String(t.name) : '';
+    if (!name.trim()) return null;
+    let data: string;
+    if (typeof t.data === 'string') data = t.data;
+    else {
+      try {
+        data = JSON.stringify(t.data ?? '');
+      } catch (err) {
+        // fallback to empty string if data can't be stringified
+        data = '';
+      }
+    }
+    const example = t.example != null ? String(t.example) : undefined;
+    return { name: name.trim(), data, example };
+  };
+
+  // Ensure template names are unique within a collection. If duplicates
+  // exist, append " (2)", " (3)", ... to make them distinct.
+  const ensureUniqueTemplateNames = (tpls: Template[]): Template[] => {
+    const result: Template[] = [];
+    const exists = (name: string) => result.some(r => r.name === name);
+
+    for (const t of tpls) {
+      const original = t.name;
+      // Try original name first
+      if (!exists(original)) {
+        result.push(t);
+        continue;
+      }
+
+      // If original exists, find next available suffix
+      let i = 2;
+      let candidate = `${original} (${i})`;
+      while (exists(candidate)) {
+        i += 1;
+        candidate = `${original} (${i})`;
+      }
+      result.push({ ...t, name: candidate });
+    }
+
+    return result;
+  };
+
+  const [mainFileName, setMainFileName] = useState('PromptGrid Studio');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [deletedTemplates, setDeletedTemplates] = useState<DeletedTemplate[]>([]);
   const [currentTemplateName, setCurrentTemplateName] = useState<string>('');
@@ -49,6 +101,11 @@ export default function App() {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showImportCollectionModal, setShowImportCollectionModal] = useState(false);
   const [showExportCollectionModal, setShowExportCollectionModal] = useState(false);
+  const [newProjectConfirmOpen, setNewProjectConfirmOpen] = useState(false);
+  const [renameProjectDialogOpen, setRenameProjectDialogOpen] = useState(false);
+  const [removeTemplateConfirmOpen, setRemoveTemplateConfirmOpen] = useState(false);
+  const [templateToRemove, setTemplateToRemove] = useState<string>('');
+  const [clearOutputConfirmOpen, setClearOutputConfirmOpen] = useState(false);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -62,6 +119,20 @@ export default function App() {
       const mainFile: MainFile = JSON.parse(savedMainFile);
       setMainFileName(mainFile.mainFileName);
       setTemplates(mainFile.templates);
+    } else {
+      // No saved project — preload built-in templates generated at build time
+      try {
+        const built = BUILTIN_MAIN_FILE as unknown as MainFile;
+        if (built && Array.isArray(built.templates)) {
+          const sanitized = built.templates.map(sanitizeTemplate).filter(Boolean) as Template[];
+          const unique = ensureUniqueTemplateNames(sanitized);
+          setMainFileName(built.mainFileName || mainFileName);
+          setTemplates(unique);
+        }
+      } catch (err) {
+        // if something goes wrong, fall back to an empty collection
+        console.error('Failed to load built-in templates', err);
+      }
     }
 
     if (savedGrid) {
@@ -112,22 +183,29 @@ export default function App() {
   }, [currentTemplateName]);
 
   const handleNewMainFile = () => {
-    if (confirm('Create a new project? This will clear all templates and current work.')) {
-      setMainFileName('New Project');
-      setTemplates([]);
-      setGrid([[{ title: 'Start', buttons: [] }, null, null]]);
-      setCurrentTemplateName('');
-      setOutput('');
-      toast.success('New project created');
-    }
+    setNewProjectConfirmOpen(true);
+  };
+
+  const handleNewMainFileConfirm = () => {
+    setMainFileName('New Project');
+    setTemplates([]);
+    setGrid([[{ title: 'Start', buttons: [] }, null, null]]);
+    setCurrentTemplateName('');
+    setOutput('');
+    toast.success('New project created');
+    setNewProjectConfirmOpen(false);
   };
 
   const handleRenameMainFile = () => {
-    const newName = prompt('Enter new project name:', mainFileName);
-    if (newName && newName.trim()) {
+    setRenameProjectDialogOpen(true);
+  };
+
+  const handleRenameMainFileConfirm = (newName: string) => {
+    if (newName && newName.trim() && newName !== mainFileName) {
       setMainFileName(newName.trim());
       toast.success('Project renamed');
     }
+    setRenameProjectDialogOpen(false);
   };
 
   const handleExportAll = () => {
@@ -149,18 +227,32 @@ export default function App() {
   const handleImportAll = (file: File, mode: 'replace' | 'merge') => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const imported: MainFile = JSON.parse(e.target?.result as string);
-        if (mode === 'replace') {
-          setMainFileName(imported.mainFileName);
-          setTemplates(imported.templates);
-          toast.success('Project replaced');
-        } else {
-          setTemplates([...templates, ...imported.templates]);
-          toast.success('Templates merged');
-        }
-      } catch (error) {
-        toast.error('Failed to import file');
+      const content = e.target?.result as string;
+      const res = validateJsonFromText(content || '');
+      if (!res.ok) {
+        toast.error(res.error || 'Failed to parse import file');
+        return;
+      }
+
+      const imported = res.parsed as MainFile;
+      if (!imported || !Array.isArray(imported.templates)) {
+        toast.error('Invalid project file format');
+        return;
+      }
+
+      const sanitized = imported.templates.map(sanitizeTemplate).filter(Boolean) as Template[];
+      if (sanitized.length === 0) {
+        toast.error('No valid templates found in import');
+        return;
+      }
+
+      if (mode === 'replace') {
+        setMainFileName(imported.mainFileName || mainFileName);
+        setTemplates(ensureUniqueTemplateNames(sanitized));
+        toast.success('Project replaced');
+      } else {
+        setTemplates(ensureUniqueTemplateNames([...templates, ...sanitized]));
+        toast.success('Templates merged');
       }
     };
     reader.readAsText(file);
@@ -221,21 +313,26 @@ export default function App() {
   };
 
   const handleRemoveTemplate = (name: string) => {
-    if (confirm(`Remove template "${name}"? You can restore it later.`)) {
-      const template = templates.find(t => t.name === name);
-      if (template) {
-        setDeletedTemplates([...deletedTemplates, { ...template, deletedDate: new Date().toISOString() }]);
-        setTemplates(templates.filter(t => t.name !== name));
-        if (currentTemplateName === name) {
-          setCurrentTemplateName('');
-        }
-        toast.success('Template removed');
+    setTemplateToRemove(name);
+    setRemoveTemplateConfirmOpen(true);
+  };
+
+  const handleRemoveTemplateConfirm = () => {
+    const template = templates.find(t => t.name === templateToRemove);
+    if (template) {
+      setDeletedTemplates([...deletedTemplates, { ...template, deletedDate: new Date().toISOString() }]);
+      setTemplates(templates.filter(t => t.name !== templateToRemove));
+      if (currentTemplateName === templateToRemove) {
+        setCurrentTemplateName('');
       }
+      toast.success('Template removed');
     }
+    setRemoveTemplateConfirmOpen(false);
+    setTemplateToRemove('');
   };
 
   const handleRestoreTemplate = (template: DeletedTemplate) => {
-    setTemplates([...templates, { name: template.name, data: template.data, example: template.example }]);
+    setTemplates(ensureUniqueTemplateNames([...templates, { name: template.name, data: template.data, example: template.example }]));
     setDeletedTemplates(deletedTemplates.filter(t => t.name !== template.name || t.deletedDate !== template.deletedDate));
     toast.success('Template restored');
   };
@@ -243,19 +340,40 @@ export default function App() {
   const handleImportTemplate = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const imported = JSON.parse(e.target?.result as string);
-        if (imported.name && imported.data) {
-          setTemplates([...templates, imported]);
-          toast.success('Template imported');
-        } else {
-          toast.error('Invalid template file');
-        }
-      } catch (error) {
-        toast.error('Failed to import template');
+      const content = e.target?.result as string;
+      const res = validateJsonFromText(content || '');
+      if (!res.ok) {
+        toast.error(res.error || 'Failed to parse template file');
+        return;
+      }
+
+      const imported = res.parsed;
+      const s = sanitizeTemplate(imported);
+      if (s) {
+        setTemplates(ensureUniqueTemplateNames([...templates, s]));
+        toast.success('Template imported');
+      } else {
+        toast.error('Invalid template file');
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleValidateOutputJson = () => {
+    const res = validateJsonFromText(output || '');
+    if (!res.ok) {
+      toast.error(res.error || 'No valid JSON found in output');
+      return;
+    }
+
+    // Pretty-print the extracted JSON back to the output area
+    try {
+      const pretty = JSON.stringify(res.parsed, null, 2);
+      setOutput(pretty);
+      toast.success('Valid JSON extracted and formatted');
+    } catch (err) {
+      toast.success('JSON validated');
+    }
   };
 
   const handleExportTemplate = () => {
@@ -277,12 +395,18 @@ export default function App() {
   };
 
   const handleImportTemplatesCollection = (templatesToImport: Template[], mode: 'replace' | 'merge') => {
+    const sanitized = templatesToImport.map(sanitizeTemplate).filter(Boolean) as Template[];
+    if (sanitized.length === 0) {
+      toast.error('No valid templates to import');
+      return;
+    }
+
     if (mode === 'replace') {
-      setTemplates(templatesToImport);
-      toast.success(`Replaced all templates with ${templatesToImport.length} imported template(s)`);
+      setTemplates(ensureUniqueTemplateNames(sanitized));
+      toast.success(`Replaced all templates with ${sanitized.length} imported template(s)`);
     } else {
-      setTemplates([...templates, ...templatesToImport]);
-      toast.success(`Merged ${templatesToImport.length} template(s) into collection`);
+      setTemplates(ensureUniqueTemplateNames([...templates, ...sanitized]));
+      toast.success(`Merged ${sanitized.length} template(s) into collection`);
     }
   };
 
@@ -308,10 +432,13 @@ export default function App() {
   };
 
   const handleClearOutput = () => {
-    if (confirm('Clear all output text?')) {
-      setOutput('');
-      toast.success('Output cleared');
-    }
+    setClearOutputConfirmOpen(true);
+  };
+
+  const handleClearOutputConfirm = () => {
+    setOutput('');
+    toast.success('Output cleared');
+    setClearOutputConfirmOpen(false);
   };
 
   const handleCopyOutput = () => {
@@ -332,7 +459,7 @@ export default function App() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-background p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           <MainFileCard
             fileName={mainFileName}
@@ -364,6 +491,7 @@ export default function App() {
             onClear={handleClearOutput}
             onCopy={handleCopyOutput}
             onShowExample={handleShowExample}
+            onValidateJson={handleValidateOutputJson}
             hasExample={!!currentTemplate?.example}
           />
 
@@ -419,6 +547,50 @@ export default function App() {
           onClose={() => setShowExportCollectionModal(false)}
           templates={templates}
           mainFileName={mainFileName}
+        />
+
+        <ConfirmDialog
+          open={newProjectConfirmOpen}
+          title="Create New Project"
+          description="Create a new project? This will clear all templates and current work."
+          onConfirm={handleNewMainFileConfirm}
+          onCancel={() => setNewProjectConfirmOpen(false)}
+          confirmText="Create"
+          isDangerous
+        />
+
+        <InputDialog
+          open={renameProjectDialogOpen}
+          title="Rename Project"
+          label="New project name"
+          placeholder="Enter new project name..."
+          defaultValue={mainFileName}
+          onConfirm={handleRenameMainFileConfirm}
+          onCancel={() => setRenameProjectDialogOpen(false)}
+          confirmText="Rename"
+        />
+
+        <ConfirmDialog
+          open={removeTemplateConfirmOpen}
+          title="Remove Template"
+          description={`Remove template "${templateToRemove}"? You can restore it later.`}
+          onConfirm={handleRemoveTemplateConfirm}
+          onCancel={() => {
+            setRemoveTemplateConfirmOpen(false);
+            setTemplateToRemove('');
+          }}
+          confirmText="Remove"
+          isDangerous
+        />
+
+        <ConfirmDialog
+          open={clearOutputConfirmOpen}
+          title="Clear Output"
+          description="Clear all output text?"
+          onConfirm={handleClearOutputConfirm}
+          onCancel={() => setClearOutputConfirmOpen(false)}
+          confirmText="Clear"
+          isDangerous
         />
 
         <Toaster position="bottom-right" />

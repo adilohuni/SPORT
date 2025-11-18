@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
+import { toast } from 'sonner';
 
 interface SaveTemplateModalProps {
   open: boolean;
@@ -26,7 +27,7 @@ export function SaveTemplateModal({ open, onClose, onSave, currentTemplateName, 
 
   const handleSave = () => {
     if (!name.trim()) {
-      alert('Please enter a template name');
+      toast.error('Please enter a template name');
       return;
     }
     onSave(name.trim(), example.trim() || undefined);

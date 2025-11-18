@@ -2,6 +2,8 @@
 
 :root {
   --font-size: 16px;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  --font-heading: 'Poppins', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   --background: #ffffff;
   --foreground: #0f172a; /* slate-900 */
   --card: #ffffff;
@@ -78,6 +80,34 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* Improved button visual styles and extra color variants */
+.btn {
+  font-family: var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn-shadow { box-shadow: 0 6px 18px rgba(13, 14, 23, 0.08); }
+
+/* primary gradient and hover */
+.bg-primary { background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary) 95%, white 5%), var(--primary)); }
+.bg-primary:hover { filter: brightness(0.98); }
+
+/* secondary accent variants */
+.bg-secondary { background-image: linear-gradient(180deg, color-mix(in srgb, var(--secondary) 90%, white 10%), var(--secondary)); }
+.bg-accent { background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, white 10%), var(--accent)); }
+
+/* subtle outline style */
+.btn-outline { border: 1px solid var(--border); background: linear-gradient(180deg, transparent, transparent); }
+
+
 /* Utility mappings so Tailwind-style classes used in components work with our CSS variables */
 @layer utilities {
   .bg-primary { background-color: var(--primary) !important; }
@@ -98,6 +128,85 @@
   .border-border { border-color: var(--border) !important; }
   .bg-input { background-color: var(--input-background) !important; }
   .ring-ring { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 12%, transparent) !important; }
+
+  /* Map common Tailwind gray utilities to theme-aware values to avoid
+     light background leaks when using dark mode. */
+  .bg-gray-50 { background-color: var(--card) !important; }
+  .bg-card { background-color: var(--card) !important; }
+  .bg-background { background-color: var(--background) !important; }
+  .bg-gray-100 { background-color: color-mix(in srgb, var(--muted) 85%, var(--card) 15%) !important; }
+  .bg-gray-300 { background-color: color-mix(in srgb, var(--muted) 65%, var(--card) 35%) !important; }
+  .text-gray-400, .text-gray-500, .text-gray-600 { color: var(--muted-foreground) !important; }
+  .text-gray-700 { color: var(--foreground) !important; }
+  .border-gray-300 { border-color: var(--border) !important; }
+  .hover\:bg-gray-50:hover { background-color: var(--card) !important; }
+  .file\:bg-gray-100::file-selector-button { background-color: var(--input-background) !important; }
+}
+
+/* Toolbar button styles that follow theme variables and work in dark & light */
+.toolbar-btn {
+  --btn-padding-y: 0.375rem;
+  --btn-padding-x: 0.6rem;
+  font-family: var(--font-sans);
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.toolbar-btn:active { transform: translateY(1px); }
+
+.toolbar-save {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+.toolbar-save:hover { filter: brightness(0.97); }
+
+.toolbar-new {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+}
+.toolbar-new:hover { filter: brightness(0.97); }
+
+.toolbar-remove {
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.toolbar-remove:hover { filter: brightness(0.96); }
+
+.toolbar-import,
+.toolbar-export,
+.toolbar-import-collection,
+.toolbar-export-collection {
+  background-color: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+.toolbar-import:hover,
+.toolbar-export:hover,
+.toolbar-import-collection:hover,
+.toolbar-export-collection:hover {
+  background-color: color-mix(in srgb, var(--muted) 8%, transparent);
+}
+
+.toolbar-outline {
+  background-color: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+.toolbar-restore {
+  background-color: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+
+/* Make sure ghost + outline buttons don't show a white background in dark mode */
+.toolbar-btn[variant="ghost"],
+.toolbar-btn[variant="outline"] {
+  background: transparent !important;
 }
 
 @theme inline {
@@ -142,13 +251,33 @@
 }
 
 @layer base {
+  /* Reset and ensure the theme background fills the viewport to avoid leaks */
+  *, *::before, *::after { box-sizing: border-box; }
+
   * {
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html, body {
+    height: 100%;
+    background-color: var(--background);
+    color: var(--foreground);
+    margin: 0;
+    padding: 0;
   }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,h2,h3,h4 { font-family: var(--font-heading); }
+
+  /* Map legacy utility class `.bg-white` to the theme-aware card color to prevent
+     white background "leaks" when switching to dark mode. This avoids editing
+     many component files that used `bg-white` class names. */
+  .bg-white { background-color: var(--card) !important; color: var(--card-foreground) !important; }
 }
 
 /**

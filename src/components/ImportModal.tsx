@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { toast } from 'sonner';
 
 interface ImportModalProps {
   open: boolean;
@@ -23,7 +24,7 @@ export function ImportModal({ open, onClose, onImport }: ImportModalProps) {
 
   const handleImport = () => {
     if (!selectedFile) {
-      alert('Please select a file');
+      toast.error('Please select a file');
       return;
     }
     onImport(selectedFile, mode);

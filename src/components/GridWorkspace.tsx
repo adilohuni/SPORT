@@ -39,13 +39,13 @@ export function GridWorkspace({ grid, onGridChange, onAddButtonText }: GridWorks
   };
 
   return (
-    <div className="bg-white rounded-lg border p-6 space-y-4">
+    <div className="bg-card rounded-lg border border-border p-6 space-y-4">
       {grid.map((row, rowIndex) => (
         <div key={rowIndex} className="flex gap-4">
           {row.map((cell, colIndex) => {
             if (cell === null) {
               return (
-                <EmptyCell
+                        <EmptyCell
                   key={`${rowIndex}-${colIndex}`}
                   rowIndex={rowIndex}
                   colIndex={colIndex}
@@ -95,11 +95,11 @@ function EmptyCell({ rowIndex, colIndex, onConvert, onDrop }: EmptyCellProps) {
       ref={drop}
       onClick={() => onConvert(rowIndex, colIndex)}
       className={`flex-1 min-w-[200px] min-h-[150px] border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors ${
-        isOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+        isOver ? 'border-blue-500 bg-blue-50' : 'border-border hover:border-border hover:bg-muted'
       }`}
     >
-      <Plus className="w-8 h-8 text-gray-400 mb-2" />
-      <div className="text-sm text-gray-500">
+      <Plus className="w-8 h-8 text-muted-foreground mb-2" />
+      <div className="text-sm text-muted-foreground">
         R{rowIndex + 1}C{colIndex + 1}
       </div>
     </div>

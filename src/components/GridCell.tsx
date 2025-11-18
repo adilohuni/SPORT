@@ -4,6 +4,9 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { GripVertical, Trash2, Plus } from 'lucide-react';
 import { PhraseButton } from './PhraseButton';
+import { ConfirmDialog } from './ConfirmDialog';
+import { InputDialog } from './InputDialog';
+import { toast } from 'sonner';
 import type { Cell } from '../App';
 
 interface GridCellProps {
@@ -18,6 +21,8 @@ interface GridCellProps {
 export function GridCell({ cell, rowIndex, colIndex, onCellChange, onAddButtonText, onSwapCells }: GridCellProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(cell.title);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddButtonDialog, setShowAddButtonDialog] = useState(false);
 
   const [{ isDragging }, drag, preview] = useDrag({
     type: 'CELL',
@@ -66,12 +71,17 @@ export function GridCell({ cell, rowIndex, colIndex, onCellChange, onAddButtonTe
 
   const handleDelete = () => {
     if (cell.buttons.length > 0) {
-      if (confirm('Delete this cell and all its buttons?')) {
-        onCellChange(rowIndex, colIndex, null);
-      }
+      setShowDeleteDialog(true);
     } else {
       onCellChange(rowIndex, colIndex, null);
+      toast.success('Cell deleted');
     }
+  };
+
+  const handleDeleteConfirm = () => {
+    onCellChange(rowIndex, colIndex, null);
+    setShowDeleteDialog(false);
+    toast.success('Cell deleted');
   };
 
   const handleTitleSave = () => {
@@ -80,13 +90,18 @@ export function GridCell({ cell, rowIndex, colIndex, onCellChange, onAddButtonTe
   };
 
   const handleAddButton = () => {
-    const text = prompt('Enter button text:');
-    if (text && text.trim()) {
+    setShowAddButtonDialog(true);
+  };
+
+  const handleAddButtonConfirm = (text: string) => {
+    if (text.trim()) {
       onCellChange(rowIndex, colIndex, {
         ...cell,
         buttons: [...cell.buttons, text.trim()]
       });
+      toast.success('Button added');
     }
+    setShowAddButtonDialog(false);
   };
 
   const handleButtonDelete = (buttonIndex: number) => {
@@ -104,79 +119,101 @@ export function GridCell({ cell, rowIndex, colIndex, onCellChange, onAddButtonTe
   };
 
   return (
-    <div
-      ref={(node) => {
-        preview(node);
-        drop(node);
-      }}
-      className={`flex-1 min-w-[200px] border-2 rounded-lg p-4 transition-all ${
-        isDragging ? 'opacity-50' : ''
-      } ${isOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 flex-1">
-          <div ref={drag} className="cursor-move">
-            <GripVertical className="w-4 h-4 text-gray-400" />
+    <>
+      <div
+        ref={(node) => {
+          preview(node);
+          drop(node);
+        }}
+        className={`flex-1 min-w-[200px] border-2 rounded-lg p-4 transition-all ${
+          isDragging ? 'opacity-50' : ''
+        } ${isOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 flex-1">
+            <div ref={drag} className="cursor-move">
+              <GripVertical className="w-4 h-4 text-gray-400" />
+            </div>
+            {isEditingTitle ? (
+              <Input
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                autoFocus
+                className="h-8"
+              />
+            ) : (
+              <div
+                onClick={() => {
+                  setTempTitle(cell.title);
+                  setIsEditingTitle(true);
+                }}
+                className="cursor-pointer hover:text-blue-600 break-words"
+              >
+                {cell.title}
+              </div>
+            )}
           </div>
-          {isEditingTitle ? (
-            <Input
-              value={tempTitle}
-              onChange={(e) => setTempTitle(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
-              autoFocus
-              className="h-8"
+          <Button onClick={handleDelete} variant="ghost" size="sm">
+            <Trash2 className="w-4 h-4 text-gray-500" />
+          </Button>
+        </div>
+
+        <div className="text-xs text-gray-500 mb-3">
+          R{rowIndex + 1}C{colIndex + 1}
+        </div>
+
+        <Button onClick={handleAddButton} variant="outline" size="sm" className="w-full mb-3">
+          <Plus className="w-4 h-4 mr-1" />
+         Add Thought 
+        </Button>
+
+        <div
+          ref={dropButton}
+          className={`space-y-2 min-h-[50px] p-2 rounded border-2 border-dashed transition-colors break-words ${
+            isOverButton ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+          }`}
+        >
+          {cell.buttons.map((buttonText, index) => (
+            <PhraseButton
+              key={index}
+              text={buttonText}
+              index={index}
+              rowIndex={rowIndex}
+              colIndex={colIndex}
+              onButtonClick={onAddButtonText}
+              onButtonDelete={handleButtonDelete}
+              onButtonEdit={handleButtonEdit}
             />
-          ) : (
-            <div
-              onClick={() => {
-                setTempTitle(cell.title);
-                setIsEditingTitle(true);
-              }}
-              className="cursor-pointer hover:text-blue-600 break-words"
-            >
-              {cell.title}
+          ))}
+          {cell.buttons.length === 0 && (
+            <div className="text-sm text-gray-400 text-center py-4">
+              Drag buttons here or click Add Button
             </div>
           )}
         </div>
-        <Button onClick={handleDelete} variant="ghost" size="sm">
-          <Trash2 className="w-4 h-4 text-gray-500" />
-        </Button>
       </div>
 
-      <div className="text-xs text-gray-500 mb-3">
-        R{rowIndex + 1}C{colIndex + 1}
-      </div>
+      <ConfirmDialog
+        open={showDeleteDialog}
+        title="Delete Cell"
+        description="Delete this cell and all its buttons?"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setShowDeleteDialog(false)}
+        confirmText="Delete"
+        isDangerous
+      />
 
-      <Button onClick={handleAddButton} variant="outline" size="sm" className="w-full mb-3">
-        <Plus className="w-4 h-4 mr-1" />
-        Add Button
-      </Button>
-
-      <div
-        ref={dropButton}
-        className={`space-y-2 min-h-[50px] p-2 rounded border-2 border-dashed transition-colors break-words ${
-          isOverButton ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-        }`}
-      >
-        {cell.buttons.map((buttonText, index) => (
-          <PhraseButton
-            key={index}
-            text={buttonText}
-            index={index}
-            rowIndex={rowIndex}
-            colIndex={colIndex}
-            onButtonClick={onAddButtonText}
-            onButtonDelete={handleButtonDelete}
-            onButtonEdit={handleButtonEdit}
-          />
-        ))}
-        {cell.buttons.length === 0 && (
-          <div className="text-sm text-gray-400 text-center py-4">
-            Drag buttons here or click Add Button
-          </div>
-        )}
-      </div>
-    </div>
+      <InputDialog
+        open={showAddButtonDialog}
+        title="Add Button"
+        label="Button text"
+        placeholder="Enter button text..."
+        onConfirm={handleAddButtonConfirm}
+        onCancel={() => setShowAddButtonDialog(false)}
+        confirmText="Add"
+      />
+    </>
   );
 }

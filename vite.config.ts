@@ -48,6 +48,12 @@
         '@radix-ui/react-alert-dialog@1.1.6': '@radix-ui/react-alert-dialog',
         '@radix-ui/react-accordion@1.2.3': '@radix-ui/react-accordion',
         '@': path.resolve(__dirname, './src'),
+        // Force single instance of CodeMirror packages to avoid duplicate-extension errors
+        '@codemirror/state': path.resolve(__dirname, 'node_modules/@codemirror/state'),
+        '@codemirror/view': path.resolve(__dirname, 'node_modules/@codemirror/view'),
+        '@codemirror/basic-setup': path.resolve(__dirname, 'node_modules/@codemirror/basic-setup'),
+        '@codemirror/lang-json': path.resolve(__dirname, 'node_modules/@codemirror/lang-json'),
+        '@replit/codemirror-vim': path.resolve(__dirname, 'node_modules/@replit/codemirror-vim'),
       },
     },
     build: {
