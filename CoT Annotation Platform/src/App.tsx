@@ -111,8 +111,8 @@ function App() {
       ],
       versionHistory: {},
       steps: Array.from({ length: 12 }, (_, i) => ({
-        id: `step-${i + 1}`,
-        nodeId: `node_step_${i + 1}`,
+        id: `step-${i}`,
+        nodeId: `Step ${i}`,
         prompt: `Analyze the following scenario and provide reasoning:\n\nScenario ${i + 1}: A user is trying to optimize their workflow. What steps should they consider?`,
         thoughts: [
           {
